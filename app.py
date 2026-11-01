@@ -56,13 +56,14 @@ with st.sidebar:
     st.header('Подключения')
     st.caption('Локальная версия · ничего не публикуется')
     connected = 'token' in st.session_state
-    st.success('Spotify подключён') if connected else st.info('Spotify пока не подключён')
     if connected:
+        st.success('Spotify подключён')
         if st.button('Выйти из Spotify'):
             for key in ['token', 'auth_pending', 'tracks', 'replacement', 'confirmed', 'write', 'finished', 'account']:
                 st.session_state.pop(key, None)
             st.rerun()
     else:
+        st.info('Spotify пока не подключён')
         cid = os.getenv('SPOTIFY_CLIENT_ID', '').strip()
         if cid:
             try:

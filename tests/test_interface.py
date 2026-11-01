@@ -92,3 +92,45 @@ def test_uncertain_creation_cannot_auto_retry(monkeypatch):
     app.run()
     assert calls == ['create']
     assert not any(b.label == 'Создать приватный плейлист' for b in app.button)
+
+
+def assert_no_internal_output(app):
+    assert not app.exception
+    assert not any('DeltaGenerator' in element.value for element in app.code)
+    assert not any('DeltaGenerator' in element.value for element in app.markdown)
+    assert not any('DeltaGenerator' in str(element.proto) for element in app.get('help_info'))
+
+
+def test_sidebar_status_never_renders_delta_generator():
+    app = AppTest.from_file(APP).run(timeout=20)
+    assert any(info.value == 'Spotify пока не подключён' for info in app.sidebar.info)
+    assert_no_internal_output(app)
+    app.session_state['token'] = {'access_token': 'test-only'}
+    app.run()
+    assert any(message.value == 'Spotify подключён' for message in app.sidebar.success)
+    assert_no_internal_output(app)
+
+
+def test_sidebar_pkce_login_buttons(monkeypatch):
+    from playlist_maker.auth import AuthBroker
+
+    class LocalTestBroker(AuthBroker):
+        def serve(self):
+            return None  # UI test does not start a network service.
+
+        def claim(self, state, claim):
+            return {'access_token': 'test-only'}
+
+    monkeypatch.setattr('playlist_maker.auth.AuthBroker', LocalTestBroker)
+    monkeypatch.setenv('SPOTIFY_CLIENT_ID', 'sidebar-ui-test-client')
+    app = AppTest.from_file(APP).run(timeout=20)
+    prepare = next(b for b in app.sidebar.button if b.label == 'Подготовить вход Spotify')
+    assert not prepare.disabled
+    prepare.click().run()
+    assert_no_internal_output(app)
+    links = app.sidebar.get('link_button')
+    login = next(link for link in links if link.proto.label == 'Войти в Spotify ↗')
+    assert login.proto.url.startswith('http://127.0.0.1:8888/login?request=')
+    next(b for b in app.sidebar.button if b.label == 'Проверить вход').click().run()
+    assert_no_internal_output(app)
+    assert any(message.value == 'Spotify подключён' for message in app.sidebar.success)
